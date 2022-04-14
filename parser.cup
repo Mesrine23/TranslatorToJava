@@ -1,0 +1,108 @@
+/* Simple +/-/* expression language; parser evaluates constant expressions on the fly*/
+/**
+ *  Package and Import Specifications
+ */
+import java_cup.runtime.*;
+
+/**
+ *  Usercode Components
+ */
+parser code {:
+    // Connect this parser to a scanner!
+    Scanner s;
+    Parser(Scanner s){ this.s=s; }
+:}
+
+/* define how to connect to the scanner! */
+scan with {: return s.next_token(); :};
+
+/**
+ *  Symbol Lists
+ */
+
+/* Terminals (tokens returned by the scanner). */
+terminal            PLUS, REVERSE;
+terminal            IF, ELSE, PREFIX;
+terminal            LBRACKET,RBRACKET,COMMA,LPAREN,RPAREN;
+terminal String     STRING_LITERAL,ID;        // our scanner provides numbers as strings
+
+/*  Non terminals */
+non terminal            program;
+non terminal String     fun_decl_list,fun_decl,arg_list_decl;
+non terminal String     fun_call,arg_list_call,arg_tail,arg_tail_d;
+non terminal String     expr_list,expr;
+
+/**
+ *  Precedence Declarations
+ */
+
+//precedence(if) < precedence(concat) < precedence(reverse)
+precedence left LPAREN, RPAREN, COMMA;
+precedence left REVERSE, PLUS, IF;
+
+/**
+ *  The Grammar Rules
+ */
+program ::= fun_decl_list:fdl expr_list:expL{:
+                                                    System.out.println("public class Main{\n");
+                                                    System.out.print(fdl);
+                                                    System.out.println("\tpublic static void main(String[] args){");
+                                                    System.out.print(expL);
+                                                    System.out.println("\t}");
+                                                    System.out.println("\n}");
+                                                :}
+          | fun_decl_list:fdl {:
+                                 System.out.println("public class Main{\n");
+                                 System.out.print(fdl);
+                                 System.out.println("\tpublic static void main(String[] args){");
+                                 System.out.println("\t}");
+                                 System.out.println("\n}");
+                               :}
+          | expr_list:expL {:
+                            System.out.println("public class Main{\n");
+                            System.out.println("\tpublic static void main(String[] args){");
+                            System.out.print(expL);
+                            System.out.println("\t}");
+                            System.out.println("\n}");
+                           :}
+;
+
+fun_decl_list ::= fun_decl_list:fdl fun_decl:fd  {: RESULT = fdl+fd; :}
+                | fun_decl:fd {: RESULT = fd; :}
+;
+
+fun_decl ::=  ID:name arg_list_decl:ald expr:e RBRACKET {: RESULT = "\tpublic static String " + name + ald + "\n\t\treturn " + e + ";\n\t}\n\n"; :}
+;
+
+arg_list_decl ::= LPAREN ID:id arg_tail_d:at {: RESULT = "(String " + id + at; :}
+                | LPAREN LBRACKET {: RESULT = "() {"; :}
+;
+
+arg_tail_d ::= COMMA ID:id arg_tail_d:at {: RESULT = ", String " + id + at; :}
+           | LBRACKET {: RESULT = ") {"; :}
+;
+
+expr_list ::= expr_list:el expr:e {: RESULT = el + "\t\tSystem.out.println(" + e + ";\n"; :}
+            | expr:e {: RESULT = "\t\tSystem.out.println(" + e + ";\n"; :}
+;
+
+fun_call ::=  ID:name arg_list_call:alc {: RESULT = name + alc ; :}
+;
+
+arg_list_call ::= LPAREN expr:e arg_tail:at {: RESULT = "(" + e + at; :}
+                | LPAREN RPAREN {: RESULT = "()"; :}
+;
+
+arg_tail ::= COMMA expr:e arg_tail:at {: RESULT = ", " + e + at; :}
+           | RPAREN {: RESULT = ")"; :}
+;
+
+//prefix = startsWith()
+//e2.startsWith(e1)
+expr::= IF LPAREN expr:e1 PREFIX expr:e2 RPAREN expr:e3 ELSE expr:e4 {: RESULT = "(" + e2 + ").startsWith(" + e1 + ")?" + e3 + ":" + e4; :}
+      | REVERSE expr:e {: RESULT = "new StringBuffer(" + e + ").reverse().toString()"; :}
+      | expr:e1 PLUS expr:e2 {: RESULT = "(" + e1 + ")+(" + e2 + ")"; :}
+      | ID:id {: RESULT = id; :}
+      | STRING_LITERAL:s {: RESULT = "\"" + s + "\""; :}
+      | fun_call:fc {: RESULT = fc; :}
+;
